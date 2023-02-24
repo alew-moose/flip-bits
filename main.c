@@ -1,356 +1,172 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <time.h>
 #include <math.h>
+#include <unistd.h>
 #include <ncurses.h>
+#include "board.h"
+#include "draw.h"
 
-typedef uint32_t u32;
+enum {NO_CTRL, CTRL, ALT};
 
-typedef struct {
-	int size;
-	u32 *bit_rows;
-	u32 *row_nums;
-	u32 *col_nums;
-} Board;
+enum {
+	KEY_CTRL_UP,
+	KEY_CTRL_DOWN,
+	KEY_CTRL_LEFT,
+	KEY_CTRL_RIGHT,
+	KEY_ALT_UP,
+	KEY_ALT_DOWN,
+	KEY_ALT_LEFT,
+	KEY_ALT_RIGHT,
+};
 
-typedef struct {
-	u32 num;
-	bool correct;
-} Num;
+int read_input(void);
 
-typedef struct {
-	int y, x;
-} Coord;
-
-typedef enum {
-	DIR_UP,
-	DIR_DOWN,
-	DIR_LEFT,
-	DIR_RIGHT,
-} Dir;
-
-Board *blank_board(int size)
+int input(int ctrl, int prefix[], int prefix_len)
 {
-	Board *b = malloc(sizeof(Board));
-	if (!b)
-		return NULL;
+	int ch = getch();
 
-	u32 *bit_rows, *row_nums, *col_nums;
-
-	if (!(bit_rows = calloc(size, sizeof(u32))))
-		goto ERR_BIT_ROWS;
-	if (!(row_nums = calloc(size, sizeof(u32))))
-		goto ERR_ROW_NUMS;
-	if (!(col_nums = calloc(size, sizeof(u32))))
-		goto ERR_COL_NUMS;
-
-	b->size = size;
-	b->bit_rows = bit_rows;
-	b->row_nums = row_nums;
-	b->col_nums = col_nums;
-	return b;
-
-ERR_COL_NUMS:
-	free(row_nums);
-ERR_ROW_NUMS:
-	free(bit_rows);
-ERR_BIT_ROWS:
-	free(b);
-	return NULL;
-}
-
-void board_flip_bit(Board *b, int y, int x)
-{
-	b->bit_rows[y] ^= 1 << (b->size - x - 1);
-}
-
-Board *rand_board(int size)
-{
-
-	Board *b = blank_board(size);
-	if (!b)
-		return NULL;
-
-	u32 maxnum = pow(2.0, size);
-	for (int y = 0; y < size; y++) {
-		u32 num = rand() % maxnum;
-		b->row_nums[y] = num;
-	}
-
-	// TODO: col_nums
-
-	return b;
-
-	/* int coords_len = size * size; */
-	/* Coord *coords = malloc(coords_len * sizeof(Coord)); */
-	/* if (!coords) */
-	/* 	goto ERR_COORDS; */
-
-	/* for (int y = 0; y < size; y++) { */
-	/* 	for (int x = 0; x < size; x++) { */
-	/* 		coords[y * size + x] = (Coord){y, x}; */
-	/* 	} */
-	/* } */
-
-	/* int to_fill = size * size / 2; // TODO */
-	/* int filled = 0; */
-
-	/* while (filled < to_fill) { */
-	/* 	int c = rand() % coords_len; */
-	/* 	board_flip_bit(b, coords[c].y, coords[c].x); */
-	/* 	coords[c] = coords[coords_len - 1]; */
-	/* 	coords_len--; */
-	/* 	filled++; */
-	/* } */
-
-	/* for (int y = 0; y < size; y++) { */
-	/* 	b->row_nums[y] = b->bit_rows[y]; */
-	/* } */
-	/* /1* for (int x = 0; x < size; x++) { *1/ */
-	/* /1* 	b->col_nums *1/ */
-	/* /1* } *1/ */
-
-	/* free(coords); */
-
-	/* return b; */
-
-/* ERR_COORDS: */
-/* 	free(b); */
-
-/* 	return NULL; */
-}
-
-int board_bit(Board *b, int y, int x)
-{
-	if (b->bit_rows[y] & (1 << (b->size - x - 1)))
-		return 1;
-	return 0;
-}
-
-Num board_row_num(Board *b, int y)
-{
-	Num n;
-	n.num = b->row_nums[y];
-	n.correct = n.num == b->bit_rows[y];
-	return n;
-}
-
-// does't work
-Num board_col_num(Board *b, int x)
-{
-	u32 n = 0;
-	for (int y = 0; y < b->size; y++) {
-		n |= (b->bit_rows[y] & (1 << x));
-	}
-	Num num;
-	num.num = n;
-	num.correct = num.num == b->col_nums[x];
-	return num;
-}
-
-#define COLOR_NORMAL COLOR_PAIR(1)
-#define COLOR_BIT_ON (COLOR_PAIR(1) | A_BOLD)
-#define COLOR_BIT_OFF (COLOR_PAIR(1))
-#define COLOR_NUM_CORRECT (COLOR_PAIR(2) | A_BOLD)
-#define COLOR_NUM_NORMAL (COLOR_PAIR(1) | A_BOLD)
-
-
-int ui_setup(void)
-{
-	initscr();
-
-	if ((start_color() != OK) ||
-	    (noecho() != OK) ||
-	    (cbreak() != OK) ||
-	    (set_escdelay(0) != OK) ||
-	    (keypad(stdscr, true) != OK) ||
-	    (init_pair(1, COLOR_WHITE, COLOR_BLACK) != OK) ||
-	    (init_pair(2, COLOR_GREEN, COLOR_BLACK) != OK)
-	) {
-		endwin();
-		return -1;
-	}
-
-	return 0;
-}
-
-int ui_shutdown(void)
-{
-	return endwin();
-}
-
-WINDOW *window_init(int board_size)
-{
-	int scr_height, scr_width;
-	getmaxyx(stdscr, scr_height, scr_width);
-
-	int win_width  = board_size * 2 + 4;
-	int win_height = board_size * 2 + 4;
-	int win_left   = (scr_width  - win_width)  / 2;
-	int win_top    = (scr_height - win_height) / 2;
-
-	WINDOW *win = newwin(win_height, win_width, win_top, win_left);
-	if (!win)
-		return NULL;
-
-	if (keypad(win, true) != OK) {
-		delwin(win);
-		return NULL;
-	}
-
-	return win;
-}
-
-void window_free(WINDOW *win)
-{
-	delwin(win);
-}
-
-void draw_border(WINDOW *win, Board *b)
-{
-      wattrset(win, COLOR_NORMAL);
-      int len = b->size * 2;
-      mvwvline(win, 1, len, ACS_VLINE, len-1);
-      mvwhline(win, len, 0, ACS_HLINE, len);
-      mvwaddch(win, len, len, ACS_LRCORNER);
-      wrefresh(win);
-}
-
-void draw_bit(WINDOW *win, int y, int x, int bit)
-{
-	wattrset(win, bit ? COLOR_BIT_ON : COLOR_BIT_OFF);
-	mvwaddch(win, y*2 + 1, x*2 + 1, bit + '0');
-}
-
-void draw_bits(WINDOW *win, Board *b)
-{
-	for (int y = 0; y < b->size; y++) {
-		for (int x = 0; x < b->size; x++) {
-			draw_bit(win, y, x, board_bit(b, y, x));
+	if (ctrl == CTRL) {
+		switch (ch) {
+		case 65: return KEY_CTRL_UP;
+		case 66: return KEY_CTRL_DOWN;
+		case 68: return KEY_CTRL_LEFT;
+		case 67: return KEY_CTRL_RIGHT;
+		default: return read_input();
 		}
 	}
-}
-
-void draw_row_num(WINDOW *win, Board *b, int i)
-{
-	Num n = board_row_num(b, i);
-	if (n.correct)
-		wattrset(win, COLOR_NUM_CORRECT);
-	else
-		wattrset(win, COLOR_NUM_NORMAL);
-	int y = 2 * i + 1;
-	int x = b->size * 2 + 1;
-	mvwprintw(win, y, x, "%d", n.num);
-}
-
-void draw_row_nums(WINDOW *win, Board *b)
-{
-	for (int i = 0; i < b->size; i++) {
-		draw_row_num(win, b, i);
-	}
-}
-
-// XXX: doesn't work
-void draw_col_num(WINDOW *win, Board *b, int i)
-{
-	Num n = board_col_num(b, i);
-
-	if (n.correct)
-		wattrset(win, COLOR_NUM_CORRECT);
-	else
-		wattrset(win, COLOR_NUM_NORMAL);
-
-	int y = 2 * i + 1;
-	int x = b->size * 2 + 1 + 10;
-	mvwprintw(win, y, x, "%d", n.num);
-
-	/* char buf[32]; */
-	/* int y = b->size * 2 + 1; */
-	/* int x = 2 * i + 1; */
-	/* snprintf(buf, 32, "%u", n.num); */
-	/* char *ch = buf; */
-	/* while (*ch) { */
-	/* 	mvwaddch(win, y, x, *ch); */
-	/* 	ch++; */
-	/* 	y++; */
-	/* } */
-}
-
-void draw_col_nums(WINDOW *win, Board *b) {
-	for (int i = 0; i < b->size; i++) {
-		draw_col_num(win, b, i);
-	}
-}
-
-void set_cursor_position(WINDOW *win, Coord cursor)
-{
-	int y = cursor.y * 2 + 1;
-	int x = cursor.x * 2 + 1;
-	wmove(win, y, x);
-}
-
-void window_draw(WINDOW *win, Board *b, Coord cursor)
-{
-	draw_border(win, b);
-	draw_bits(win, b);
-	draw_row_nums(win, b);
-	/* draw_col_nums(win, b); */
-	set_cursor_position(win, cursor);
-	wrefresh(win);
-}
-
-Coord cursor_move(Coord cursor, Dir dir, int size)
-{
-	Coord c = cursor;
-	switch (dir) {
-	case DIR_UP: c.y--; break;
-	case DIR_DOWN: c.y++; break;
-	case DIR_LEFT: c.x--; break;
-	case DIR_RIGHT: c.x++; break;
+	if (ctrl == ALT) {
+		switch (ch) {
+		case 65: return KEY_ALT_UP;
+		case 66: return KEY_ALT_DOWN;
+		case 68: return KEY_ALT_LEFT;
+		case 67: return KEY_ALT_RIGHT;
+		default: return read_input();
+		}
 	}
 
-	c.y = (size + c.y) % size;
-	c.x = (size + c.x) % size;
+	if (prefix_len == 0) {
+		switch (ch) {
+		case 53: return input(CTRL, NULL, 0);
+		case 51: return input(ALT, NULL, 0);
+		default: return input(NO_CTRL, NULL, 0);
+		}
+	}
 
-	return c;
+	if (ch == prefix[0]) {
+		return input(ctrl, &prefix[1], prefix_len-1);
+	}
 
+	switch (ch) {
+	case KEY_UP:
+	case KEY_DOWN:
+	case KEY_LEFT:
+	case KEY_RIGHT:
+	case ' ':
+	case 'q': case 'Q':
+		return ch;
+	default:
+		return input(ctrl, prefix, prefix_len);
+	}
+
+	return 0;
+}
+
+int read_input(void) {
+	int ctrl_prefix[] = {27, 91, 49, 59};
+	int ctrl_prefix_len = 4;
+	return input(NO_CTRL, ctrl_prefix, ctrl_prefix_len);
+}
+
+void flip_multi(Board *b, Coord c, int dy, int dx)
+{
+	int y = c.y;
+	int x = c.x;
+	while (y >= 0 && y < b->size && x >= 0 && x < b->size) {
+		board_flip_bit(b, y, x);
+		y += dy;
+		x += dx;
+	}
 }
 
 int main(void)
 {
-	srand(time(NULL));
+	srand(0);
 	Board *b = rand_board(6);
-	(void)b;
-
-	clear();
+	if (!b) {
+		return 1;
+	}
 
 	if (ui_setup() < 0) {
 		endwin();
 		return 1;
 	}
+
+	/* clear(); */
+
 	WINDOW *win = window_init(b->size);
 	if (!win) {
 		// TODO
+		endwin();
 		return 1;
 	}
 	Coord cursor = (Coord){0, 0};
+
+	/* refresh(); */
 	window_draw(win, b, cursor);
 
+	/* mvwprintw(win, 0, 0, "aosehtn"); */
+	/* wrefresh(win); */
 
 	int ch;
-	while ((ch = getch())) {
-		window_draw(win, b, cursor);
-		Dir dir = DIR_UP;
+	while (1) {
+		Dir dir;
+		ch = read_input();
+		/* mvwprintw(win, 0, 0, "%d      ", ch); */
+		/* wrefresh(win); */
+
 		switch (ch) {
-		case KEY_UP:    dir = DIR_UP;    break;
-		case KEY_DOWN:  dir = DIR_DOWN;  break;
-		case KEY_LEFT:  dir = DIR_LEFT;  break;
+		case KEY_ALT_UP:     cursor.y = 0; break;
+		case KEY_ALT_DOWN:   cursor.y = b->size - 1; break;
+		case KEY_ALT_LEFT:   cursor.x = 0; break;
+		case KEY_ALT_RIGHT:  cursor.x = b->size - 1; break;
+		case KEY_CTRL_UP:    flip_multi(b, cursor, -1, 0); break;
+		case KEY_CTRL_DOWN:  flip_multi(b, cursor, 1, 0); break;
+		case KEY_CTRL_LEFT:  flip_multi(b, cursor, 0, -1); break;
+		case KEY_CTRL_RIGHT: flip_multi(b, cursor, 0, 1); break;
+
+		default: goto NOT_CTRL;
+		}
+		wclear(win);
+		window_draw(win, b, cursor);
+			if (board_correct(b)) {
+				sleep(1);
+				free_board(b);
+				b = rand_board(6);
+				cursor = (Coord){0, 0};
+				wclear(win);
+				window_draw(win, b, cursor);
+			}
+		continue;
+
+	NOT_CTRL:
+
+		switch (ch) {
+		case 'q': case 'Q': goto EXIT; break;
+		case KEY_UP:    dir = DIR_UP; break;
+		case KEY_DOWN:  dir = DIR_DOWN; break;
+		case KEY_LEFT:  dir = DIR_LEFT; break;
 		case KEY_RIGHT: dir = DIR_RIGHT; break;
 		case ' ':
 			board_flip_bit(b, cursor.y, cursor.x);
 			window_draw(win, b, cursor);
+			if (board_correct(b)) {
+				sleep(1);
+				free_board(b);
+				b = rand_board(6);
+				cursor = (Coord){0, 0};
+				wclear(win);
+				window_draw(win, b, cursor);
+			}
 			continue;
 			break;
 		default: continue;
@@ -360,6 +176,7 @@ int main(void)
 	}
 
 
+EXIT:
 	ui_shutdown();
 	return 0;
 }
