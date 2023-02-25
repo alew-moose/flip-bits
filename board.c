@@ -67,7 +67,7 @@ Board *rand_board(int size)
 
 	u32 max = pow(2, size);
 	for (int y = 0; y < size; y++) {
-		b->rows_want[y] = rand() % max;
+		b->rows_want[y] = rand() % (max - 1) + 1;
 	}
 
 	for (int x = 0; x < size; x++) {
@@ -96,8 +96,6 @@ bool board_correct(Board *b)
 			return false;
 	return true;
 }
-
-// TODO: free_board
 
 int board_bit(Board *b, int y, int x)
 {

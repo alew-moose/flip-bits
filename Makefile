@@ -1,3 +1,4 @@
+CC=cc
 CFLAGS=-O2 -Wall -Wextra -pedantic -std=c11
 LDLIBS=-lncursesw -lm
 TARGET=flip-bits
@@ -12,5 +13,16 @@ $(TARGET): $(OBJS)
 
 
 clean:
-	@-rm -f *.o
-	@-rm -f $(TARGET)
+	rm -f *.o
+	rm -f $(TARGET)
+
+
+# for f in *.c; do gcc -MM -MT ${f%.c}.o $f; done
+board.o: board.c board.h common.h
+draw.o: draw.c draw.h board.h common.h
+main.o: main.c board.h common.h draw.h
+
+.SUFFIXES: .c .o
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+

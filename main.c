@@ -90,7 +90,8 @@ void flip_multi(Board *b, Coord c, int dy, int dx)
 
 int main(void)
 {
-	srand(0);
+	srand(time(NULL));
+
 	Board *b = rand_board(6);
 	if (!b) {
 		return 1;
@@ -101,8 +102,6 @@ int main(void)
 		return 1;
 	}
 
-	/* clear(); */
-
 	WINDOW *win = window_init(b->size);
 	if (!win) {
 		// TODO
@@ -110,12 +109,7 @@ int main(void)
 		return 1;
 	}
 	Coord cursor = (Coord){0, 0};
-
-	/* refresh(); */
 	window_draw(win, b, cursor);
-
-	/* mvwprintw(win, 0, 0, "aosehtn"); */
-	/* wrefresh(win); */
 
 	int ch;
 	while (1) {
@@ -133,9 +127,9 @@ int main(void)
 		case KEY_CTRL_DOWN:  flip_multi(b, cursor, 1, 0); break;
 		case KEY_CTRL_LEFT:  flip_multi(b, cursor, 0, -1); break;
 		case KEY_CTRL_RIGHT: flip_multi(b, cursor, 0, 1); break;
-
 		default: goto NOT_CTRL;
 		}
+
 		wclear(win);
 		window_draw(win, b, cursor);
 			if (board_correct(b)) {
