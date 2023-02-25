@@ -3,8 +3,9 @@ CFLAGS=-O2 -Wall -Wextra -pedantic -std=c11
 LDLIBS=-lncursesw -lm
 TARGET=flip-bits
 OBJS=main.o board.o draw.o
+PREFIX=/usr/local
 
-.PHONY: all clean
+.PHONY: all clean install
 
 all: $(TARGET)
 
@@ -15,6 +16,10 @@ $(TARGET): $(OBJS)
 clean:
 	rm -f *.o
 	rm -f $(TARGET)
+
+install: $(TARGET)
+	cp -f $< $(DESTDIR)$(PREFIX)/bin
+
 
 
 # for f in *.c; do gcc -MM -MT ${f%.c}.o $f; done
