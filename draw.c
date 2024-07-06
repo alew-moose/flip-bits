@@ -141,10 +141,12 @@ void set_cursor_position(WINDOW *win, Coord cursor)
 
 void window_draw(WINDOW *win, Board *b, Coord cursor)
 {
+	curs_set(0);
 	draw_border(win, b);
 	draw_bits(win, b);
 	draw_row_nums(win, b);
 	draw_col_nums(win, b);
 	set_cursor_position(win, cursor);
 	wrefresh(win);
+	curs_set(1);
 }
