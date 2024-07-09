@@ -132,14 +132,14 @@ int main(void)
 
 		wclear(win);
 		window_draw(win, b, cursor);
-			if (board_correct(b)) {
-				sleep(1);
-				free_board(b);
-				b = rand_board(6);
-				cursor = (Coord){0, 0};
-				wclear(win);
-				window_draw(win, b, cursor);
-			}
+		if (board_correct(b)) {
+			sleep(1);
+			free_board(b);
+			b = rand_board(6);
+			cursor = (Coord){0, 0};
+			wclear(win);
+			window_draw(win, b, cursor);
+		}
 		continue;
 
 	NOT_CTRL:
